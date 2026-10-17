@@ -1,0 +1,66 @@
+name: Android helper APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "packages/artemis-accessibility-helper/**"
+      - ".github/workflows/android-helper-apk.yml"
+  pull_request:
+    paths:
+      - "packages/artemis-accessibility-helper/**"
+      - ".github/workflows/android-helper-apk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-helper:
+    name: Build existing accessibility helper
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform and build tools
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build helper APK
+        shell: bash
+        run: |
+          cd packages/artemis-accessibility-helper
+          chmod +x build_apk.sh
+          ./build_apk.sh
+
+      - name: Verify APK exists and manifest is generated
+        shell: bash
+        run: |
+          test -s packages/artemis-accessibility-helper/ArtemisAccessibilityHelper.apk
+          test -s packages/artemis-accessibility-helper/helper_manifest.json
+          sha256sum packages/artemis-accessibility-helper/ArtemisAccessibilityHelper.apk
+          cat packages/artemis-accessibility-helper/helper_manifest.json
+
+      - name: Upload helper APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ArtemisAccessibilityHelper
+          path: |
+            packages/artemis-accessibility-helper/ArtemisAccessibilityHelper.apk
+            packages/artemis-accessibility-helper/helper_manifest.json
+          if-no-files-found: error
+          retention-days: 14
