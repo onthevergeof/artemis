@@ -39,7 +39,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          set +o pipefail
           yes | sdkmanager --licenses
+          set -o pipefail
           sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Python
