@@ -19,6 +19,8 @@ jobs:
     name: Build existing accessibility helper
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -29,12 +31,20 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # GitHub-hosted Ubuntu runners already include the Android SDK.
-      # Avoid setup-android's legacy "tools" install: that package no longer exists.
+      # Locate the SDK manager in the runner's preinstalled Android SDK.
+      # Do not depend on sdkmanager being added to PATH by the runner image.
       - name: Install Android platform and build tools
+        shell: bash
         run: |
-          yes | sdkmanager --licenses
-          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+          set -euo pipefail
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)"
+          if [[ -z "$SDKMANAGER" ]]; then
+            echo "sdkmanager not found under $ANDROID_HOME/cmdline-tools"
+            find "$ANDROID_HOME" -maxdepth 3 -type d | head -80 || true
+            exit 1
+          fi
+          yes | "$SDKMANAGER" --licenses
+          "$SDKMANAGER" --install "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Python
         uses: actions/setup-python@v5
