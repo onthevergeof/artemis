@@ -5,6 +5,7 @@ This is the first Android application shell for ARTEMIS. It provides an installa
 ## Current scope
 
 - Connect to an existing ARTEMIS server URL.
+- Bundle an embedded CPython 3.12 runtime for the Android ARM64 ABI and run a startup diagnostic probe.
 - Remember the selected server URL locally.
 - Display the original ARTEMIS web console in Android WebView.
 - Keep same-origin console navigation inside the app and open external links in the browser.
@@ -13,7 +14,7 @@ This is the first Android application shell for ARTEMIS. It provides an installa
 
 ## Important limitation
 
-This APK does **not** yet bundle the Python agent, ADB/UIAutomator runtime, model-provider libraries, or MCP server. The ARTEMIS backend must already be running at the configured URL. This client is not yet the requested single-device, offline/standalone Artemis agent.
+This APK does **not** yet bundle the Python agent, ADB/UIAutomator runtime, model-provider libraries, or MCP server. The ARTEMIS backend must already be running at the configured URL. The APK now includes an embedded CPython 3.12 interpreter, but the ARTEMIS agent modules and required third-party/native dependencies are not yet bundled or executed on-device. This client is not yet the requested single-device, standalone Artemis agent.
 
 The separate `ArtemisAccessibilityHelper.apk` is still the device accessibility bridge. It is not the agent runtime.
 
