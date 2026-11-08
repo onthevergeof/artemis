@@ -222,7 +222,9 @@ public class MainActivity extends Activity {
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         settings.setSupportMultipleWindows(false);
-        settings.setSafeBrowsingEnabled(true);
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            settings.setSafeBrowsingEnabled(true);
+        }
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
