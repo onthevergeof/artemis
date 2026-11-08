@@ -3,6 +3,7 @@
 The helper listens only on 127.0.0.1:18888. A random session token is passed
 from the containing Android app and is never placed in a URL or log message.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,7 +23,9 @@ def configure(token: str) -> None:
     _SESSION_TOKEN = token
 
 
-def _request(path: str, *, method: str = "GET", payload: dict[str, Any] | None = None) -> dict[str, Any]:
+def _request(
+    path: str, *, method: str = "GET", payload: dict[str, Any] | None = None
+) -> dict[str, Any]:
     if not _SESSION_TOKEN:
         raise RuntimeError("Accessibility bridge is not configured")
     body = None if payload is None else json.dumps(payload).encode("utf-8")
