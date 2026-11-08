@@ -1,0 +1,117 @@
+name: Android APKs
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - android-standalone-port
+    paths:
+      - "android-app/**"
+      - "packages/artemis-accessibility-helper/**"
+      - ".github/workflows/android-apks.yml"
+  pull_request:
+    paths:
+      - "android-app/**"
+      - "packages/artemis-accessibility-helper/**"
+      - ".github/workflows/android-apks.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-apks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ARTEMIS Android APKs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: "platform-tools"
+
+      - name: Install Android platform and build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +o pipefail
+          yes | sdkmanager --licenses >/dev/null
+          set -o pipefail
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Python 3.12 for Chaquopy
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build Android console client
+        run: gradle --no-daemon -p android-app :app:assembleDebug
+
+      - name: Build existing accessibility helper
+        shell: bash
+        run: |
+          cd packages/artemis-accessibility-helper
+          chmod +x build_apk.sh
+          ./build_apk.sh
+
+      - name: Verify APK signatures and app identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_APK="android-app/app/build/outputs/apk/debug/app-debug.apk"
+          HELPER_APK="packages/artemis-accessibility-helper/ArtemisAccessibilityHelper.apk"
+
+          test -s "$APP_APK"
+          test -s "$HELPER_APK"
+
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APP_APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$HELPER_APK"
+
+          test "$(apkanalyzer manifest application-id "$APP_APK")" = "com.artemis.android"
+          test "$(apkanalyzer manifest version-name "$APP_APK")" = "0.3.1"
+          test "$(apkanalyzer manifest application-id "$HELPER_APK")" = "com.artemis.helper"
+          unzip -Z1 "$APP_APK" | grep -Fx "lib/arm64-v8a/libpython3.12.so"
+
+      - name: Verify APK outputs and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s packages/artemis-accessibility-helper/helper_manifest.json
+          sha256sum android-app/app/build/outputs/apk/debug/app-debug.apk
+          sha256sum packages/artemis-accessibility-helper/ArtemisAccessibilityHelper.apk
+          cat packages/artemis-accessibility-helper/helper_manifest.json
+
+      - name: Upload ARTEMIS console client APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARTEMIS-Android-Console-Client
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload existing accessibility helper APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ARTEMIS-Accessibility-Helper
+          path: |
+            packages/artemis-accessibility-helper/ArtemisAccessibilityHelper.apk
+            packages/artemis-accessibility-helper/helper_manifest.json
+          if-no-files-found: error
+          retention-days: 30
