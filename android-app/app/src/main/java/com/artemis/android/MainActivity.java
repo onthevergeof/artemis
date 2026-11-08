@@ -28,6 +28,9 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.chaquo.python.Python;
+import com.chaquo.python.android.AndroidPlatform;
+
 public class MainActivity extends Activity {
     private static final String PREFS = "artemis_console";
     private static final String KEY_BACKEND = "backend_url";
@@ -38,6 +41,8 @@ public class MainActivity extends Activity {
     private EditText backendInput;
     private ValueCallback<Uri[]> uploadCallback;
     private String activeUrl = DEFAULT_BACKEND;
+    private TextView runtimeStatusView;
+    private volatile String runtimeSummary = "Embedded Python: starting…";
 
     @Override
     protected void onCreate(Bundle state) {
@@ -53,6 +58,7 @@ public class MainActivity extends Activity {
             activeUrl = saved;
             showConsole(saved);
         }
+        startEmbeddedPython();
     }
 
     private int dp(float value) {
@@ -138,6 +144,10 @@ public class MainActivity extends Activity {
                 Color.rgb(107, 115, 132));
         helper.setPadding(0, dp(12), 0, 0);
         content.addView(helper);
+
+        runtimeStatusView = label(runtimeSummary, 12, Color.rgb(54, 89, 217));
+        runtimeStatusView.setPadding(0, dp(14), 0, 0);
+        content.addView(runtimeStatusView);
     }
 
     private void connectToBackend() {
@@ -210,6 +220,9 @@ public class MainActivity extends Activity {
         progress.setMax(100);
         root.addView(progress, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(3)));
+        runtimeStatusView = label(runtimeSummary, 11, Color.rgb(76, 87, 108));
+        runtimeStatusView.setPadding(dp(12), dp(4), dp(12), dp(4));
+        root.addView(runtimeStatusView);
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.WHITE);
@@ -281,6 +294,34 @@ public class MainActivity extends Activity {
         root.addView(webView, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
         webView.loadUrl(url);
+    }
+
+    private void startEmbeddedPython() {
+        Thread worker = new Thread(() -> {
+            String result;
+            try {
+                if (!Python.isStarted()) {
+                    Python.start(new AndroidPlatform(getApplication()));
+                }
+                String json = Python.getInstance()
+                        .getModule("artemis_android.runtime_probe")
+                        .callAttr("runtime_info")
+                        .toString();
+                org.json.JSONObject info = new org.json.JSONObject(json);
+                result = "Embedded Python " + info.optString("python", "")
+                        + " ready (" + info.optString("machine", "Android") + "). "
+                        + (info.optBoolean("agent_integrated", false)
+                        ? "ARTEMIS engine loaded."
+                        : "ARTEMIS engine packages are not bundled yet.");
+            } catch (Exception error) {
+                result = "Embedded Python could not start: " + error.getClass().getSimpleName();
+            }
+            runtimeSummary = result;
+            runOnUiThread(() -> {
+                if (runtimeStatusView != null) runtimeStatusView.setText(runtimeSummary);
+            });
+        }, "artemis-python-startup");
+        worker.start();
     }
 
     private boolean sameOrigin(Uri first, Uri second) {
