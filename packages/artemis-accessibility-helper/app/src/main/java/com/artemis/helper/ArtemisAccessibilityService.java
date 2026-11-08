@@ -156,15 +156,28 @@ public class ArtemisAccessibilityService extends AccessibilityService {
                 builder = new Notification.Builder(this);
             }
 
-            builder.setContentTitle("Artemis test helper is running")
-                    .setContentText("Lets Artemis read this screen during automated tests. "
-                            + "Remove with: artemis helper uninstall")
-                    .setStyle(new Notification.BigTextStyle().bigText(
-                            "Installed by Artemis to read the screen layout during automated "
+            boolean bundledApp = "com.artemis.android".equals(getPackageName());
+            String notificationTitle = bundledApp
+                    ? "ARTEMIS accessibility is active"
+                    : "Artemis test helper is running";
+            String notificationText = bundledApp
+                    ? "The user-enabled accessibility bridge is available to ARTEMIS on this device."
+                    : "Lets Artemis read this screen during automated tests. Remove with: artemis helper uninstall";
+            String notificationDetails = bundledApp
+                    ? "ARTEMIS can read screen content and perform requested UI actions while this "
+                            + "Accessibility service is enabled. Its bridge listens only on this "
+                            + "device (127.0.0.1:" + DEFAULT_PORT
+                            + ") and accepts requests with the private app session token. "
+                            + "The bridge itself does not send data to external servers. Disable "
+                            + "ARTEMIS Accessibility in Android Settings whenever you are done."
+                    : "Installed by Artemis to read the screen layout during automated "
                             + "tests. It answers only on this device (127.0.0.1:" + DEFAULT_PORT
                             + "), only to the computer that is connected over USB debugging and "
                             + "holds the session token, and it sends nothing anywhere. Remove it "
-                            + "any time with `artemis helper uninstall` or from Settings > Apps."))
+                            + "any time with `artemis helper uninstall` or from Settings > Apps.";
+            builder.setContentTitle(notificationTitle)
+                    .setContentText(notificationText)
+                    .setStyle(new Notification.BigTextStyle().bigText(notificationDetails))
                     .setSmallIcon(android.R.drawable.stat_notify_sync)
                     .setOngoing(true);
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
