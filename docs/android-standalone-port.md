@@ -35,4 +35,9 @@ Connect the app to the accessibility helper, test on Android 13/ARM64, verify UI
 
 ## Current status
 
-Milestone 1 is the first implementation step. The complete standalone APK is **not yet built**. Do not rename or present the helper APK as the full Artemis app.
+- **Milestone 1 — completed:** the existing accessibility helper can be built reproducibly and uploaded by GitHub Actions.
+- **Milestone 2 — not started:** isolate the agent loop from host-only ADB/MCP and desktop dependencies.
+- **Milestone 3 — initial shell committed:** `android-app/` now contains a native Android console client. It remembers an ARTEMIS server URL and displays the existing console through WebView. This preserves the server's existing UI rather than reimplementing or silently dropping console features, but it still requires a running ARTEMIS backend. It is not the standalone agent.
+- **Milestone 4 — not started:** real-device validation of an on-device engine and accessibility integration.
+
+The Android console client and the accessibility helper are separate APKs/artifacts. Neither one alone is the complete Artemis agent. Do not describe the current console client as standalone until the Python agent runtime is bundled, the required dependencies work on Android ARM64, and the acceptance tests above pass.
