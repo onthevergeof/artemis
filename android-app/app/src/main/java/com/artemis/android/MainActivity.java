@@ -133,9 +133,9 @@ public class MainActivity extends Activity {
         connect.setOnClickListener(v -> connectToBackend());
 
         TextView note = label(
-                "Important: this APK is the Android console client. The ARTEMIS Python engine "
-                + "and its dependencies are not bundled yet. Start that server first. "
-                + "HTTP is allowed only for localhost; use HTTPS for remote servers.",
+                "Important: this APK includes an embedded Python interpreter baseline, but the ARTEMIS "
+                + "agent modules and dependencies are not bundled yet. Start the existing server "
+                + "to use the console. HTTP is allowed only for localhost; use HTTPS remotely.",
                 12, Color.rgb(107, 115, 132));
         note.setPadding(0, dp(18), 0, 0);
         content.addView(note);
