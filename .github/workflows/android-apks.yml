@@ -71,12 +71,28 @@ jobs:
           chmod +x build_apk.sh
           ./build_apk.sh
 
-      - name: Verify APK outputs
+      - name: Verify APK signatures and app identities
         shell: bash
         run: |
           set -euo pipefail
-          test -s android-app/app/build/outputs/apk/debug/app-debug.apk
-          test -s packages/artemis-accessibility-helper/ArtemisAccessibilityHelper.apk
+          APP_APK="android-app/app/build/outputs/apk/debug/app-debug.apk"
+          HELPER_APK="packages/artemis-accessibility-helper/ArtemisAccessibilityHelper.apk"
+
+          test -s "$APP_APK"
+          test -s "$HELPER_APK"
+
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APP_APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$HELPER_APK"
+
+          test "$(apkanalyzer manifest application-id "$APP_APK")" = "com.artemis.android"
+          test "$(apkanalyzer manifest version-name "$APP_APK")" = "0.3.1"
+          test "$(apkanalyzer manifest application-id "$HELPER_APK")" = "com.artemis.helper"
+          unzip -Z1 "$APP_APK" | grep -Fx "lib/arm64-v8a/libpython3.12.so"
+
+      - name: Verify APK outputs and checksums
+        shell: bash
+        run: |
+          set -euo pipefail
           test -s packages/artemis-accessibility-helper/helper_manifest.json
           sha256sum android-app/app/build/outputs/apk/debug/app-debug.apk
           sha256sum packages/artemis-accessibility-helper/ArtemisAccessibilityHelper.apk
