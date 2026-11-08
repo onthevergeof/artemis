@@ -1,17 +1,22 @@
 package com.artemis.android;
 
 import android.app.Activity;
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.Settings;
+import android.view.accessibility.AccessibilityManager;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.InputMethodManager;
 import android.content.Context;
+import android.content.ComponentName;
+import android.content.pm.ResolveInfo;
 import android.webkit.SslErrorHandler;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -28,12 +33,16 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.security.SecureRandom;
+
 import com.chaquo.python.Python;
 import com.chaquo.python.android.AndroidPlatform;
+import com.artemis.helper.TokenStore;
 
 public class MainActivity extends Activity {
     private static final String PREFS = "artemis_console";
     private static final String KEY_BACKEND = "backend_url";
+    private static final String KEY_HELPER_TOKEN = "helper_session_token";
     private static final String DEFAULT_BACKEND = "http://127.0.0.1:8000";
 
     private LinearLayout root;
@@ -42,6 +51,7 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> uploadCallback;
     private String activeUrl = DEFAULT_BACKEND;
     private TextView runtimeStatusView;
+    private TextView accessibilityStatusView;
     private volatile String runtimeSummary = "Embedded Python: starting…";
 
     @Override
@@ -58,7 +68,9 @@ public class MainActivity extends Activity {
             activeUrl = saved;
             showConsole(saved);
         }
-        startEmbeddedPython();
+        String helperToken = getOrCreateHelperToken();
+        TokenStore.set(helperToken);
+        startEmbeddedPython(helperToken);
     }
 
     private int dp(float value) {
@@ -98,7 +110,7 @@ public class MainActivity extends Activity {
         title.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         content.addView(title);
 
-        TextView subtitle = label("Mobile console", 16, Color.rgb(54, 89, 217));
+        TextView subtitle = label("On-device accessibility + console", 16, Color.rgb(54, 89, 217));
         subtitle.setPadding(0, dp(4), 0, dp(24));
         content.addView(subtitle);
 
@@ -133,9 +145,10 @@ public class MainActivity extends Activity {
         connect.setOnClickListener(v -> connectToBackend());
 
         TextView note = label(
-                "Important: this APK includes an embedded Python interpreter baseline, but the ARTEMIS "
-                + "agent modules and dependencies are not bundled yet. Start the existing server "
-                + "to use the console. HTTP is allowed only for localhost; use HTTPS remotely.",
+                "The local accessibility bridge is included. Enable it below and approve the "
+                + "ARTEMIS Accessibility service in Android Settings to allow screen reading and "
+                + "user-requested UI actions. The full ARTEMIS agent modules and dependencies are "
+                + "still being ported; the original dashboard currently needs its server.",
                 12, Color.rgb(107, 115, 132));
         note.setPadding(0, dp(18), 0, 0);
         content.addView(note);
@@ -145,9 +158,28 @@ public class MainActivity extends Activity {
         helper.setPadding(0, dp(12), 0, 0);
         content.addView(helper);
 
+        Button accessibilityButton = new Button(this);
+        accessibilityButton.setText("Enable ARTEMIS Accessibility");
+        LinearLayout.LayoutParams accessibilityParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        accessibilityParams.topMargin = dp(14);
+        content.addView(accessibilityButton, accessibilityParams);
+        accessibilityButton.setOnClickListener(v -> {
+            try {
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            } catch (ActivityNotFoundException ex) {
+                Toast.makeText(this, "Accessibility settings are unavailable.", Toast.LENGTH_LONG).show();
+            }
+        });
+
+        accessibilityStatusView = label("", 12, Color.rgb(90, 100, 119));
+        accessibilityStatusView.setPadding(0, dp(8), 0, 0);
+        content.addView(accessibilityStatusView);
+
         runtimeStatusView = label(runtimeSummary, 12, Color.rgb(54, 89, 217));
-        runtimeStatusView.setPadding(0, dp(14), 0, 0);
+        runtimeStatusView.setPadding(0, dp(12), 0, 0);
         content.addView(runtimeStatusView);
+        refreshAccessibilityStatus();
     }
 
     private void connectToBackend() {
@@ -209,6 +241,12 @@ public class MainActivity extends Activity {
         toolbar.addView(address, new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.MATCH_PARENT, 1));
 
+        Button accessibilityButton = new Button(this);
+        accessibilityButton.setText("A11y");
+        toolbar.addView(accessibilityButton);
+        accessibilityButton.setOnClickListener(v ->
+                startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
+
         Button reload = new Button(this);
         reload.setText("Reload");
         toolbar.addView(reload);
@@ -223,6 +261,10 @@ public class MainActivity extends Activity {
         runtimeStatusView = label(runtimeSummary, 11, Color.rgb(76, 87, 108));
         runtimeStatusView.setPadding(dp(12), dp(4), dp(12), dp(4));
         root.addView(runtimeStatusView);
+        accessibilityStatusView = label("", 11, Color.rgb(90, 100, 119));
+        accessibilityStatusView.setPadding(dp(12), dp(2), dp(12), dp(4));
+        root.addView(accessibilityStatusView);
+        refreshAccessibilityStatus();
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.WHITE);
@@ -296,23 +338,38 @@ public class MainActivity extends Activity {
         webView.loadUrl(url);
     }
 
-    private void startEmbeddedPython() {
+    private String getOrCreateHelperToken() {
+        String token = getPreferences(MODE_PRIVATE).getString(KEY_HELPER_TOKEN, null);
+        if (token != null && token.length() >= 32) return token;
+
+        byte[] random = new byte[24];
+        new SecureRandom().nextBytes(random);
+        StringBuilder encoded = new StringBuilder(48);
+        for (byte value : random) encoded.append(String.format("%02x", value & 0xff));
+        token = encoded.toString();
+        getPreferences(MODE_PRIVATE).edit().putString(KEY_HELPER_TOKEN, token).apply();
+        return token;
+    }
+
+    private void startEmbeddedPython(String helperToken) {
         Thread worker = new Thread(() -> {
             String result;
             try {
                 if (!Python.isStarted()) {
                     Python.start(new AndroidPlatform(getApplication()));
                 }
-                String json = Python.getInstance()
-                        .getModule("artemis_android.runtime_probe")
+                Python python = Python.getInstance();
+                python.getModule("artemis_android.bridge").callAttr("configure", helperToken);
+                String json = python.getModule("artemis_android.runtime_probe")
                         .callAttr("runtime_info")
                         .toString();
                 org.json.JSONObject info = new org.json.JSONObject(json);
                 result = "Embedded Python " + info.optString("python", "")
                         + " ready (" + info.optString("machine", "Android") + "). "
+                        + "Local accessibility bridge configured. "
                         + (info.optBoolean("agent_integrated", false)
                         ? "ARTEMIS engine loaded."
-                        : "ARTEMIS engine packages are not bundled yet.");
+                        : "Agent modules and dependencies are not bundled yet.");
             } catch (Exception error) {
                 result = "Embedded Python could not start: " + error.getClass().getSimpleName();
             }
@@ -324,10 +381,42 @@ public class MainActivity extends Activity {
         worker.start();
     }
 
+    private boolean isArtemisAccessibilityEnabled() {
+        AccessibilityManager manager =
+                (AccessibilityManager) getSystemService(ACCESSIBILITY_SERVICE);
+        if (manager == null) return false;
+        ComponentName target = new ComponentName(
+                getPackageName(), "com.artemis.helper.ArtemisAccessibilityService");
+        for (AccessibilityServiceInfo service :
+                manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)) {
+            ResolveInfo resolveInfo = service.getResolveInfo();
+            if (resolveInfo != null && resolveInfo.serviceInfo != null) {
+                ComponentName enabled = new ComponentName(
+                        resolveInfo.serviceInfo.packageName, resolveInfo.serviceInfo.name);
+                if (target.equals(enabled)) return true;
+            }
+        }
+        return false;
+    }
+
+    private void refreshAccessibilityStatus() {
+        if (accessibilityStatusView == null) return;
+        boolean enabled = isArtemisAccessibilityEnabled();
+        accessibilityStatusView.setText(enabled
+                ? "Accessibility enabled. Android will show the ARTEMIS service notification."
+                : "Accessibility is off. Enable the service above to allow on-device screen access.");
+    }
+
     private boolean sameOrigin(Uri first, Uri second) {
         return first.getScheme() != null && first.getScheme().equalsIgnoreCase(second.getScheme())
                 && first.getHost() != null && first.getHost().equalsIgnoreCase(second.getHost())
                 && first.getPort() == second.getPort();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshAccessibilityStatus();
     }
 
     @Override
