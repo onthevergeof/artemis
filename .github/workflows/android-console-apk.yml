@@ -54,8 +54,13 @@ jobs:
           set -euo pipefail
           APK="android-app/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
-          apkanalyzer manifest application-id "$APK" | grep -Fx "com.artemis.android"
-          apkanalyzer manifest version-name "$APK" | grep -Fx "0.1.0"
+          EXPECTED_APPLICATION_ID="$(sed -n 's/^[[:space:]]*applicationId = "\([^"]*\)".*/\1/p' android-app/app/build.gradle.kts | head -n 1)"
+          EXPECTED_VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName = "\([^"]*\)".*/\1/p' android-app/app/build.gradle.kts | head -n 1)"
+          test -n "$EXPECTED_APPLICATION_ID"
+          test -n "$EXPECTED_VERSION_NAME"
+          apkanalyzer manifest application-id "$APK" | grep -Fx "$EXPECTED_APPLICATION_ID"
+          apkanalyzer manifest version-name "$APK" | grep -Fx "$EXPECTED_VERSION_NAME"
+          unzip -Z1 "$APK" | grep -Fx "lib/arm64-v8a/libpython3.12.so"
           sha256sum "$APK"
           ls -lh "$APK"
 
