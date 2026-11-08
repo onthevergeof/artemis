@@ -28,6 +28,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    sourceSets {
+        getByName("main") {
+            java.srcDir("../../packages/artemis-accessibility-helper/app/src/main/java")
+        }
+    }
 }
 
 chaquopy {
