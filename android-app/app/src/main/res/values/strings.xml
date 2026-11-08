@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ARTEMIS Console</string>
+    <string name="app_name">ARTEMIS</string>
+    <string name="accessibility_service_name">ARTEMIS Accessibility</string>
+    <string name="accessibility_service_description">User-enabled accessibility bridge for ARTEMIS on-device automation. Runs with a visible foreground notification and communicates only through the local device loopback interface.</string>
 </resources>
